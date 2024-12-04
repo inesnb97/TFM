@@ -26,86 +26,97 @@ for column in required_columns:
         st.error(f"El dataset no contiene la columna requerida: {column}. Por favor, verifica el archivo.")
         st.stop()
 
-# Título de la herramienta
-st.title("Herramienta de Análisis de Vivienda Asequible")
+# Título principal
+st.markdown("<h1 style='text-align: center; color: #EE6C4D;'>Herramienta de Análisis de Vivienda</h1>", unsafe_allow_html=True)
 
 # Solicitar datos del usuario
-edad = st.number_input("¿Cuál es tu edad?", min_value=18, max_value=100, step=1)
-ingresos = st.number_input("¿Cuáles son tus ingresos anuales (en euros)?", min_value=1000, step=100)
-zona_preferencia = st.selectbox("Selecciona tu zona o localidad preferida:", df['Ciudad'].unique())
+st.sidebar.header("Introduce tus datos")
+edad = st.sidebar.number_input("¿Cuál es tu edad?", min_value=18, max_value=100, step=1)
+ingresos = st.sidebar.number_input("¿Cuáles son tus ingresos anuales (en euros)?", min_value=1000, step=100)
+zona_preferencia = st.sidebar.selectbox("Selecciona tu zona o localidad preferida:", df['Ciudad'].unique())
 
 # Filtrar los datos según la zona seleccionada
 zona_df = df[df['Ciudad'] == zona_preferencia]
 
 if not zona_df.empty:
-    # Mostrar información general
-    st.subheader(f"Datos generales para {zona_preferencia}")
+    # Pestañas para estructurar la visualización
+    tab1, tab2, tab3 = st.tabs(["Indicadores", "Gráficos", "Mapa Interactivo"])
 
-    # Agrupación por tipo de vivienda
-    for tipo in zona_df['Tipo de vivienda'].unique():
-        tipo_df = zona_df[zona_df['Tipo de vivienda'] == tipo]
+    # Tab 1: Indicadores
+    with tab1:
+        st.subheader(f"Indicadores clave para {zona_preferencia}")
 
-        precio_m2 = tipo_df['Precio medio/m²'].mean()
-        valor_compra = tipo_df['Valor medio de compra'].mean()
-        variacion_anual = tipo_df['Variación anual (%)'].mean()
-        proyeccion_5 = tipo_df['Proyección 5 años (%)'].mean()
+        # Usar columnas para organizar indicadores
+        col1, col2, col3 = st.columns(3)
 
-        st.write(f"**Tipo de vivienda: {tipo}**")
-        st.write(f"• Precio medio/m²: {precio_m2:.2f} €/m²")
-        st.write(f"• Valor medio de compra: {valor_compra:.2f} €")
-        st.write(f"• Variación anual: {variacion_anual:.2f} %")
-        st.write(f"• Proyección a 5 años: {proyeccion_5:.2f} %")
+        with col1:
+            st.metric(label="Precio medio/m²", value=f"{zona_df['Precio medio/m²'].mean():.2f} €/m²")
 
-    # Crear mapa interactivo
-    st.subheader(f"Mapa interactivo de {zona_preferencia}")
-    mapa = folium.Map(location=[zona_df['Latitud'].mean(), zona_df['Longitud'].mean()], zoom_start=12)
+        with col2:
+            st.metric(label="Valor medio de compra", value=f"{zona_df['Valor medio de compra'].mean():.2f} €")
 
-    for _, row in zona_df.iterrows():
-        popup_text = f"Tipo: {row['Tipo de vivienda']}<br>Precio/m²: {row['Precio medio/m²']}<br>Valor: {row['Valor medio de compra']}"
-        folium.Marker(
-            location=[row['Latitud'], row['Longitud']],
-            popup=popup_text,
-            icon=folium.Icon(color='green' if row['Variación anual (%)'] > 0 else 'red')
-        ).add_to(mapa)
+        with col3:
+            st.metric(label="Proyección 5 años", value=f"{zona_df['Proyección 5 años (%)'].mean():.2f} %")
 
-    folium_static(mapa)
+        # Indicadores adicionales por tipo de vivienda
+        st.subheader("Detalles por tipo de vivienda")
+        for tipo in zona_df['Tipo de vivienda'].unique():
+            tipo_df = zona_df[zona_df['Tipo de vivienda'] == tipo]
+            st.write(f"**{tipo}**:")
+            st.write(f"- Precio medio/m²: {tipo_df['Precio medio/m²'].mean():.2f} €/m²")
+            st.write(f"- Valor medio de compra: {tipo_df['Valor medio de compra'].mean():.2f} €")
+            st.write(f"- Variación anual: {tipo_df['Variación anual (%)'].mean():.2f} %")
 
-    # Gráficas dinámicas: Tendencias de precios
-    st.subheader("Tendencias de precios")
+    # Tab 2: Gráficos
+    with tab2:
+        st.subheader("Tendencias de precios")
 
-    # Filtrar datos para la tendencia de precios en la zona seleccionada
-    tendencia_precios = zona_df.groupby(['Año', 'Tipo de vivienda']).agg({'Precio medio/m²': 'mean'}).reset_index()
+        # Gráfico de líneas por tipo de vivienda
+        tendencia_precios = zona_df.groupby(['Año', 'Tipo de vivienda']).agg({'Precio medio/m²': 'mean'}).reset_index()
+        fig_line = px.line(
+            tendencia_precios,
+            x='Año',
+            y='Precio medio/m²',
+            color='Tipo de vivienda',
+            title=f"Tendencia de precios en {zona_preferencia} (2014-2024)",
+            markers=True
+        )
+        st.plotly_chart(fig_line, use_container_width=True)
 
-    # Gráfico de líneas por tipo de vivienda
-    fig_line = px.line(
-        tendencia_precios,
-        x='Año',
-        y='Precio medio/m²',
-        color='Tipo de vivienda',
-        title=f"Tendencia de precios en {zona_preferencia} (2014-2024)",
-        markers=True
-    )
-    st.plotly_chart(fig_line, use_container_width=True)
+        # Gráfico de distribución de precios
+        st.subheader("Distribución de precios por tipo de vivienda")
+        fig_hist = px.histogram(
+            zona_df,
+            x='Precio medio/m²',
+            color='Tipo de vivienda',
+            nbins=30,
+            title="Distribución de precios",
+            labels={'Precio medio/m²': 'Precio medio (€/m²)'}
+        )
+        st.plotly_chart(fig_hist, use_container_width=True)
 
-    # Gráfico de distribución de precios
-    st.subheader("Distribución de precios por tipo de vivienda")
-    fig_hist = px.histogram(
-        zona_df,
-        x='Precio medio/m²',
-        color='Tipo de vivienda',
-        nbins=30,
-        title="Distribución de precios",
-        labels={'Precio medio/m²': 'Precio medio (€/m²)'}
-    )
-    st.plotly_chart(fig_hist, use_container_width=True)
+    # Tab 3: Mapa interactivo
+    with tab3:
+        st.subheader(f"Mapa interactivo de {zona_preferencia}")
+        mapa = folium.Map(location=[zona_df['Latitud'].mean(), zona_df['Longitud'].mean()], zoom_start=12)
+
+        for _, row in zona_df.iterrows():
+            popup_text = f"Tipo: {row['Tipo de vivienda']}<br>Precio/m²: {row['Precio medio/m²']}<br>Valor: {row['Valor medio de compra']}"
+            folium.Marker(
+                location=[row['Latitud'], row['Longitud']],
+                popup=popup_text,
+                icon=folium.Icon(color='green' if row['Variación anual (%)'] > 0 else 'red')
+            ).add_to(mapa)
+
+        folium_static(mapa)
+
+    # Recomendaciones personalizadas
+    st.subheader("Recomendación personalizada")
+    if edad < 30 and ingresos < 20000:
+        st.write("Se recomienda explorar opciones más asequibles y verificar programas de asistencia para jóvenes.")
+    elif edad >= 30 and ingresos >= 20000:
+        st.write("Hay opciones disponibles en zonas con precios intermedios o superiores.")
+    else:
+        st.write("Analiza diferentes zonas según tu presupuesto y preferencias.")
 else:
     st.write(f"No se encontraron datos para la zona '{zona_preferencia}'.")
-
-# Recomendaciones basadas en datos
-st.subheader("Recomendación personalizada")
-if edad < 30 and ingresos < 20000:
-    st.write("Se recomienda explorar opciones más asequibles y verificar programas de asistencia para jóvenes.")
-elif edad >= 30 and ingresos >= 20000:
-    st.write("Hay opciones disponibles en zonas con precios intermedios o superiores.")
-else:
-    st.write("Analiza diferentes zonas según tu presupuesto y preferencias.")
